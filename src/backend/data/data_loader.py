@@ -115,7 +115,38 @@ class SpeechDataset(object):
     @staticmethod
     def collate(batch_data):
 
-        return
+        x_heights = []
+        x_widths = []
+        y_lengths = []
+
+        for (current_x, current_y) in batch_data:
+            x_heights.append(current_x.shape[0])
+            x_widths.append(current_x.shape[1])
+            y_lengths.append(current_y.shape[0])
+
+        max_x_height = max(x_heights)
+        max_x_width = max(x_widths)
+        max_y_length = max(y_lengths)
+
+        x_list = list()
+        y_list = list()
+
+        for (current_x, current_y) in batch_data:
+
+            current_x = np.pad(current_x, ((0, max_x_height - current_x.shape[0]),
+                                           (0, max_x_width - current_x.shape[1])), mode='constant', constant_values=0)
+            x_list.append(current_x)
+
+            current_y = np.pad(current_y, ((0, max_y_length - current_y.shape[0]),
+                                           (0, 0)), mode='constant', constant_values=29)
+            y_list.append(current_y)
+
+        x_ = np.stack(x_list)
+        x_ = np.expand_dims(x_, -1)
+        y_ = np.stack(y_list)
+        y_ = np.squeeze(y_, -1)
+
+        return x_, y_, x_widths, y_lengths
 
     def next_item(self):
         x_, y_ = self.get_current_raw_data(self.data_index)
