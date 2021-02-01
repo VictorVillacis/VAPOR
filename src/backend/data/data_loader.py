@@ -9,7 +9,9 @@ import scipy.signal as signal
 import matplotlib.pyplot as plt
 import numpy as np
 from textwrap import wrap
-from encode_decode import char_str_to_number_seq
+from encode_decode import char_str_to_number_seq, char_dict
+import tensorflow as tf
+import tensorflow_io as tfio
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -24,7 +26,7 @@ np.random.seed(0)
 
 class SpeechDataset(object):
 
-    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0):
+    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0, sample_feature_length: int = 256):
 
         # Initialize class attributes
         self.data_dir = Path(data_dir_)
@@ -33,6 +35,7 @@ class SpeechDataset(object):
         self.vis = Visualizer()
         self.batch_size = batch_size
         self.verbose_level = verbose_level
+        self.sample_feature_length = sample_feature_length
 
         logger.info("Loading Data...")
 
@@ -102,56 +105,39 @@ class SpeechDataset(object):
 
     def next_batch(self):
 
+        # Collate data; Formats N X to NHWC, N Y to NL
+
         # Accumulate batch data
-        batch_data = []
-        for i in range(self.batch_size):
-            batch_data.append(self.next_item())
+        x_, x_lengths, y_, y_lengths = [], [], [], []
+        for iter_1 in range(self.batch_size):
+            next_x, next_x_length, next_y, next_y_length = self.next_item()
 
-        # Collate data; Pads X to NHWC, Y to NL could alternatively use Ragged Tensors
-        collated_data = self.collate(batch_data)
+            x_.append(next_x)
+            x_lengths.append(next_x_length)
+            y_.append(next_y)
+            y_lengths.append(next_y_length)
 
-        return collated_data
+        # Find maximum label length
+        max_label_len = max(y_lengths)
 
-    @staticmethod
-    def collate(batch_data):
+        # Pad all labels to maximum label length
+        for iter_1 in range(self.batch_size):
+            y_length_difference = max_label_len - y_lengths[iter_1]
+            y_pad = tf.constant([[0, y_length_difference.numpy()], [0, 0]])
+            y_[iter_1] = tf.pad(y_[iter_1], y_pad, constant_values=char_dict['_'])
 
-        x_heights = []
-        x_widths = []
-        y_lengths = []
+        # Stack X, X lengths, Y, Y lengths into batch
+        x_ = tf.stack(x_)
+        x_lengths = tf.stack(x_lengths)
+        y_ = tf.stack(y_)
+        y_lengths = tf.stack(y_lengths)
 
-        for (current_x, current_y) in batch_data:
-            x_heights.append(current_x.shape[0])
-            x_widths.append(current_x.shape[1])
-            y_lengths.append(current_y.shape[0])
-
-        max_x_height = max(x_heights)
-        max_x_width = max(x_widths)
-        max_y_length = max(y_lengths)
-
-        x_list = list()
-        y_list = list()
-
-        for (current_x, current_y) in batch_data:
-
-            current_x = np.pad(current_x, ((0, max_x_height - current_x.shape[0]),
-                                           (0, max_x_width - current_x.shape[1])), mode='constant', constant_values=0)
-            x_list.append(current_x)
-
-            current_y = np.pad(current_y, ((0, max_y_length - current_y.shape[0]),
-                                           (0, 0)), mode='constant', constant_values=29)
-            y_list.append(current_y)
-
-        x_ = np.stack(x_list)
-        x_ = np.expand_dims(x_, -1)
-        y_ = np.stack(y_list)
-        y_ = np.squeeze(y_, -1)
-
-        return x_, y_, x_widths, y_lengths
+        return x_, x_lengths, y_, y_lengths
 
     def next_item(self):
-        x_, y_ = self.get_current_raw_data(self.data_index)
+        x_, x_length, y_, y_length = self.get_current_raw_data(self.data_index)
         self.increment_index()
-        return x_, y_
+        return x_, x_length, y_, y_length
 
     def increment_index(self):
         self.data_index += 1
@@ -164,6 +150,10 @@ class SpeechDataset(object):
         return self.get_current_raw_data(item)
 
     def get_current_raw_data(self, index):
+
+        # Constants observed from LibriSpeech Dataset
+        sample_min_freq = 0
+        sample_max_freq = 8000
 
         # Get current data pair
         current_data = self.data[index]
@@ -179,10 +169,22 @@ class SpeechDataset(object):
         array_frequencies, segment_times, x_ = signal.spectrogram(x_data, sample_rate, scaling='spectrum')
         y_ = char_str_to_number_seq(y_)
 
-        # Normalize X spectrogram
-        x_ = self.linear_normalization(x_)
+        # Convert to Tensor
+        x_ = tf.convert_to_tensor(x_, dtype=tf.float32)
+        y_ = tf.convert_to_tensor(y_, dtype=tf.int8)
 
-        return x_, y_
+        # Get lengths of X and Y, needed for CTCLoss
+        x_length = tf.convert_to_tensor(x_.shape[1], dtype=tf.int16)
+        y_length = tf.convert_to_tensor(y_.shape[0], dtype=tf.int16)
+
+        # Scale X to standard feature size https://www.tensorflow.org/io/tutorials/audio
+        x_ = tfio.experimental.audio.melscale(x_, sample_rate, self.sample_feature_length,
+                                              fmin=sample_min_freq, fmax=sample_max_freq)
+
+        # Expand X to HWC
+        x_ = tf.expand_dims(x_, -1)
+
+        return x_, x_length, y_, y_length
 
     @staticmethod
     def linear_normalization(data):
@@ -229,7 +231,7 @@ if __name__ == "__main__":
     data_dir = "raw/Dev/"
     dataset = SpeechDataset(data_dir, verbose_level=1)
 
-    tmp = next(dataset)
+    tmp = dataset.next_batch()
     pass
 
 
