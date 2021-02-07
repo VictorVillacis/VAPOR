@@ -39,4 +39,4 @@ def char_str_to_number_seq(char_str):
             char = '_'
         number_seq.append(char_dict[char])
 
-    return np.expand_dims(np.asarray(number_seq), 1)
+    return np.asarray(number_seq)
