@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from tqdm import tqdm
 import logging
@@ -8,15 +7,16 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 from textwrap import wrap
-from data.encode_decode import char_str_to_number_seq, char_dict
+from encode_decode import char_str_to_number_seq, char_dict
+import os
 import tensorflow as tf
-from multiprocessing import Pool, Process
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 stdout_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(stdout_handler)
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 plt.ioff()
 
 random.seed(0)
@@ -25,7 +25,7 @@ np.random.seed(0)
 
 class SpeechDataset(object):
 
-    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0, sample_feature_length: int = 256):
+    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0):
 
         # Initialize class attributes
         self.data_dir = Path(data_dir_)
@@ -34,10 +34,19 @@ class SpeechDataset(object):
         self.vis = Visualizer()
         self.batch_size = batch_size
         self.verbose_level = verbose_level
-        self.sample_feature_length = sample_feature_length
 
         logger.info("Loading Data...")
+        self.load_data_paths()
 
+        # Get number of batches, cut data to whole batches only
+        self.batches = len(self.data) // self.batch_size
+        self.data = self.data[: self.batches * self.batch_size]
+
+        # Initial data shuffle
+        self.shuffle()
+        return
+
+    def load_data_paths(self):
         # Data uses Librespeech dataset: http://www.openslr.org/12
         # Data is organized as voice_dir > recording_dir > sample_path, with the label .txt file being in the same
         # directory as the samples
@@ -72,7 +81,6 @@ class SpeechDataset(object):
 
                             # If the audio sample name was previously found...
                             if line_sample in current_samples:
-
                                 # Get the file name, label string
                                 sample_file = current_samples[line_sample]
                                 line_label = line[len(line_sample) + 1:]
@@ -80,12 +88,6 @@ class SpeechDataset(object):
                                 # Append to self.data
                                 self.data.append({'x': sample_file, 'y': line_label})
 
-        # Get number of batches, cut data to whole batches only
-        self.batches = len(self.data) // self.batch_size
-        self.data = self.data[: self.batches * self.batch_size]
-
-        # Initial data shuffle
-        self.shuffle()
         return
 
     def shuffle(self):
@@ -108,8 +110,10 @@ class SpeechDataset(object):
     def next_batch(self):
 
         # Initialize batch objects
-        x_, x_lengths, y_, y_lengths = [None] * self.batch_size, [None] * self.batch_size, \
-                                       [None] * self.batch_size, [None] * self.batch_size
+        x_, x_lengths, y_, y_lengths = [None] * self.batch_size, \
+                                       [None] * self.batch_size, \
+                                       [None] * self.batch_size, \
+                                       [None] * self.batch_size
 
         # Get batch range
         current_data_indices = list(range(self.data_index, self.data_index + self.batch_size))
@@ -117,7 +121,7 @@ class SpeechDataset(object):
 
         # Accumulate batch data
         for batch_index, current_data_index in enumerate(current_data_indices):
-            next_x, next_x_length, next_y, next_y_length = self.get_current_raw_data(current_data_index)
+            next_x, next_x_length, next_y, next_y_length = self.get_current_raw_data(self.data, current_data_index)
 
             x_[batch_index] = next_x
             x_lengths[batch_index] = next_x_length
@@ -156,7 +160,7 @@ class SpeechDataset(object):
         return x_, x_lengths, y_, y_lengths
 
     def next_item(self):
-        x_, x_length, y_, y_length = self.get_current_raw_data(self.data_index)
+        x_, x_length, y_, y_length = self.get_current_raw_data(self.data, self.data_index)
         self.increment_index()
         return x_, x_length, y_, y_length
 
@@ -172,12 +176,12 @@ class SpeechDataset(object):
         return
 
     def __getitem__(self, item):
-        return self.get_current_raw_data(item)
+        return self.get_current_raw_data(self.data, item)
 
-    def get_current_raw_data(self, index):
-
+    @staticmethod
+    def get_current_raw_data(data, index):
         # Get current data pair
-        current_data = self.data[index]
+        current_data = data[index]
         x_path, y_ = current_data['x'], current_data['y']
 
         # Read in X
@@ -186,9 +190,6 @@ class SpeechDataset(object):
         # Process X into mel spectrogram
         x_ = librosa.feature.melspectrogram(x_data, sample_rate)
         x_ = np.log(x_ + 1e-14)
-
-        # Visualize if there is a high enough verbose level
-        self.visualize(x_, y_)
 
         # Process Y into number sequence
         y_ = char_str_to_number_seq(y_)
