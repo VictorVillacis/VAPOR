@@ -7,7 +7,7 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 from textwrap import wrap
-from encode_decode import char_str_to_number_seq, char_dict
+from data.encode_decode import char_str_to_number_seq, char_dict
 import os
 import tensorflow as tf
 
@@ -35,6 +35,7 @@ class SpeechDataset(object):
         self.batch_size = batch_size
         self.verbose_level = verbose_level
 
+        # Index data
         logger.info("Loading Data...")
         self.load_data_paths()
 
@@ -151,11 +152,14 @@ class SpeechDataset(object):
             y_pad = [0, y_length_difference]
             y_[iter_1] = np.pad(y_[iter_1], y_pad, constant_values=char_dict['_'])
 
-        # # Stack X, X lengths, Y, Y lengths into batch
+        # Stack X, X lengths, Y, Y lengths into batch
         x_ = np.stack(x_)
         x_lengths = np.stack(x_lengths)
         y_ = np.stack(y_)
         y_lengths = np.stack(y_lengths)
+
+        # Expand X dims to create channels
+        x_ = np.expand_dims(x_, -1)
 
         return x_, x_lengths, y_, y_lengths
 
@@ -213,7 +217,7 @@ class SpeechDataset(object):
         self.data_index -= 1
 
         # Create tensor specifications from sample
-        x_spec = tf.TensorSpec(shape=(x.shape[0], x.shape[1], None), dtype=x.dtype)
+        x_spec = tf.TensorSpec(shape=(x.shape[0], x.shape[1], None, x.shape[3]), dtype=x.dtype)
         x_len_spec = tf.TensorSpec(shape=x_lens.shape, dtype=x_lens.dtype)
         y_spec = tf.TensorSpec(shape=(y.shape[0], None), dtype=y.dtype)
         y_len_spec = tf.TensorSpec(shape=y_lens.shape, dtype=y_lens.dtype)
