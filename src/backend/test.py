@@ -1,11 +1,14 @@
 
 import tensorflow as tf
 from data.data_loader import SpeechDataset
+from model.model import VAPORASR
 
 
 def test_step(model, x, x_len, y, y_len):
 
     out = model(x, x_len, training=False)
+
+    return
 
 
 def test(model, opt):
@@ -26,7 +29,9 @@ if __name__ == '__main__':
     options['test_path'] = "data/raw/Dev/"
     options['batch_size'] = 8
     options['Epochs'] = 8
-    options['model'] = None
-    test(options)
+    options['model'] = "model/saves/exp7/"
+    model = VAPORASR()
+    model.load_weights(options['model'])
+    test(model, options)
 
     pass

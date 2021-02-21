@@ -2,7 +2,7 @@ from tensorflow import keras
 import tensorflow as tf
 
 
-class VAPORASR(tf.Module):
+class VAPORASR(tf.keras.Model):
 
     def get_config(self):
         pass
@@ -11,14 +11,14 @@ class VAPORASR(tf.Module):
 
         super(VAPORASR, self).__init__()
 
-        self.conv = keras.layers.Conv2D(filters=64, kernel_size=5)
+        self.conv = keras.layers.Conv2D(filters=64, kernel_size=5, padding='same')
         self.lstm = keras.layers.LSTM(units=64, return_sequences=True)
         self.dense = keras.layers.Dense(units=29, activation='sigmoid')
 
         return
 
-    @tf.Module.with_name_scope
-    def __call__(self, inputs, x_len=None, training=False, mask=None):
+    # @tf.Module.with_name_scope
+    def call(self, inputs, x_len=None, training=False, mask=None):
         x = self.conv(inputs)
         x = tf.transpose(x, perm=[0, 2, 1, 3])
         x = tf.reshape(x, [x.shape[0], -1, x.shape[2] * x.shape[3]])
@@ -26,6 +26,7 @@ class VAPORASR(tf.Module):
         x = self.dense(x)
 
         if not training:
+            x = tf.transpose(x, perm=[1, 0, 2])
             ctc_decoding = tf.nn.ctc_beam_search_decoder(inputs=x, sequence_length=x_len)
             return ctc_decoding
 

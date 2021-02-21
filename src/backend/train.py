@@ -40,7 +40,7 @@ def get_current_save_dir(save_dir):
 
 
 def save_model(model, opt):
-    tf.saved_model.save(model, opt['current_save_dir'])
+    model.save_weights(opt['current_save_dir'])
     return
 
 
@@ -53,6 +53,8 @@ def train(opt: dict):
 
     model = VAPORASR()
     optimizer = Adam()
+
+    save_model(model, opt)
 
     for epoch in range(opt['epochs']):
 
