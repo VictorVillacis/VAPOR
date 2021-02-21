@@ -18,12 +18,16 @@ class VAPORASR(tf.Module):
         return
 
     @tf.Module.with_name_scope
-    def __call__(self, inputs, training=False, mask=None):
+    def __call__(self, inputs, x_len=None, training=False, mask=None):
         x = self.conv(inputs)
         x = tf.transpose(x, perm=[0, 2, 1, 3])
         x = tf.reshape(x, [x.shape[0], -1, x.shape[2] * x.shape[3]])
         x = self.lstm(x)
         x = self.dense(x)
+
+        if not training:
+            ctc_decoding = tf.nn.ctc_beam_search_decoder(inputs=x, sequence_length=x_len)
+            return ctc_decoding
 
         return x
 

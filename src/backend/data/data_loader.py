@@ -105,10 +105,12 @@ class SpeechDataset(object):
         return self.next_batch()
 
     def __call__(self, *args, **kwargs):
-        while True:
+        yield self.next_batch()
+        while self.data_index != 0:
             yield self.next_batch()
+        return
 
-    def next_batch(self):
+    def next_batch(self, increment_index=True):
 
         # Initialize batch objects
         x_, x_lengths, y_, y_lengths = [None] * self.batch_size, \
@@ -118,7 +120,8 @@ class SpeechDataset(object):
 
         # Get batch range
         current_data_indices = list(range(self.data_index, self.data_index + self.batch_size))
-        self.data_index += self.batch_size
+        if increment_index:
+            self.increment_index()
 
         # Accumulate batch data
         for batch_index, current_data_index in enumerate(current_data_indices):
@@ -163,14 +166,9 @@ class SpeechDataset(object):
 
         return x_, x_lengths, y_, y_lengths
 
-    def next_item(self):
-        x_, x_length, y_, y_length = self.get_current_raw_data(self.data, self.data_index)
-        self.increment_index()
-        return x_, x_length, y_, y_length
-
     def increment_index(self):
-        self.data_index += 1
-        if self.data_index > len(self):
+        self.data_index += self.batch_size
+        if self.data_index >= self.batches * self.batch_size:
             self.shuffle()
             self.reset_index()
         return
@@ -182,10 +180,16 @@ class SpeechDataset(object):
     def __getitem__(self, item):
         return self.get_current_raw_data(self.data, item)
 
-    @staticmethod
-    def get_current_raw_data(data, index):
+    # @staticmethod
+    def get_current_raw_data(self, data, index):
         # Get current data pair
-        current_data = data[index]
+        try:
+            current_data = data[index]
+        except:
+            print(len(data))
+            print(index)
+            print(self.data_index)
+
         x_path, y_ = current_data['x'], current_data['y']
 
         # Read in X
@@ -212,9 +216,7 @@ class SpeechDataset(object):
 
     def get_output_tensor_signatures(self):
         # Get sample of data output
-        x, x_lens, y, y_lens = self.next_batch()
-        # De-increment data index to prior value
-        self.data_index -= 1
+        x, x_lens, y, y_lens = self.next_batch(increment_index=False)
 
         # Create tensor specifications from sample
         x_spec = tf.TensorSpec(shape=(x.shape[0], x.shape[1], None, x.shape[3]), dtype=x.dtype)
@@ -255,6 +257,10 @@ if __name__ == "__main__":
 
     data_dir = "raw/Dev/"
     dataset = SpeechDataset(data_dir, verbose_level=1)
+
+    for batch in range(dataset.batches):
+        print(batch)
+        next_data = next(dataset)
 
     tmp = dataset.next_batch()
     pass

@@ -5,6 +5,9 @@ from data.data_loader import SpeechDataset
 import tensorflow as tf
 from model.model import VAPORASR
 from tensorflow.keras.optimizers import Adam
+from pathlib import Path
+from os import mkdir
+from tqdm import tqdm
 
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -22,6 +25,25 @@ def train_step(model, optimizer, x, x_len, y, y_len):
     return loss
 
 
+def get_current_save_dir(save_dir):
+    save_dir = Path(save_dir)
+    sub_dirs = [int(x.name[3:]) for x in save_dir.iterdir() if x.is_dir()]
+
+    if len(sub_dirs) == 0:
+        mkdir(str(save_dir) + '/exp0/')
+        return str(save_dir) + '/exp0/'
+    else:
+        max_experiment = max(sub_dirs)
+        mkdir(str(save_dir) + '/exp{}/'.format(max_experiment + 1))
+
+    return str(save_dir) + '/exp{}/'.format(max_experiment + 1)
+
+
+def save_model(model, opt):
+    tf.saved_model.save(model, opt['current_save_dir'])
+    return
+
+
 def train(opt: dict):
 
     train_dataset = SpeechDataset(opt['train_path'], options['batch_size'])
@@ -32,15 +54,15 @@ def train(opt: dict):
     model = VAPORASR()
     optimizer = Adam()
 
-    for epoch in range(opt['Epochs']):
+    for epoch in range(opt['epochs']):
 
         train_dataset = train_dataset.shuffle(buffer_size=64)
 
-        for step, batch in enumerate(train_dataset):
+        for step, batch in tqdm(enumerate(train_dataset), total=num_batches):
             x, x_len, y, y_len = batch
             train_step(model, optimizer, x, x_len, y, y_len)
 
-            print(step)
+        save_model(model, opt)
 
     return
 
@@ -51,7 +73,9 @@ if __name__ == "__main__":
     options['train_path'] = "data/raw/Dev/"
     options['test_path'] = "data/raw/Dev/"
     options['batch_size'] = 8
-    options['Epochs'] = 8
+    options['epochs'] = 8
+    options['save_dir'] = 'model/saves/'
+    options['current_save_dir'] = get_current_save_dir(options['save_dir'])
     train(options)
 
     pass

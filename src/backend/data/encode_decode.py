@@ -40,3 +40,4 @@ def char_str_to_number_seq(char_str):
         number_seq.append(char_dict[char])
 
     return np.asarray(number_seq)
+
