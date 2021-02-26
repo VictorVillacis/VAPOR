@@ -1,6 +1,12 @@
 from tensorflow import keras
 import tensorflow as tf
 
+import os
+import sys
+sys.path.append(os.path.realpath('.'))
+
+from data.encode_decode import char_dict
+
 
 class VAPORASR(tf.keras.Model):
 
@@ -28,8 +34,11 @@ class VAPORASR(tf.keras.Model):
         if not training:
             x = tf.transpose(x, perm=[1, 0, 2])
             ctc_decoding = tf.nn.ctc_beam_search_decoder(inputs=x, sequence_length=x_len)
-            return ctc_decoding
-
-        return x
+            max_prediction_index = tf.math.argmax(ctc_decoding[1]).numpy()[0]
+            dense_predictions = tf.sparse.to_dense(ctc_decoding[0][0], default_value=char_dict['_'])
+            max_prediction = dense_predictions[max_prediction_index]
+            return max_prediction
+        else:
+            return x
 
 
