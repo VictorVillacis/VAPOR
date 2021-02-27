@@ -7,7 +7,7 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 from textwrap import wrap
-from data.encode_decode import char_str_to_number_seq, char_dict
+from data.encode_decode import str_to_npy_ints, char_dict
 import os
 import tensorflow as tf
 
@@ -200,7 +200,7 @@ class SpeechDataset(object):
         x_ = np.log(x_ + 1e-14)
 
         # Process Y into number sequence
-        y_ = char_str_to_number_seq(y_)
+        y_ = str_to_npy_ints(y_)
 
         # Get lengths of X and Y
         x_length = x_.shape[1]

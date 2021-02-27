@@ -31,7 +31,7 @@ def create_char_dict():
 char_dict, inv_char_dict = create_char_dict()
 
 
-def char_str_to_number_seq(char_str):
+def str_to_npy_ints(char_str):
     number_seq = list()
 
     for char in char_str:
@@ -40,4 +40,16 @@ def char_str_to_number_seq(char_str):
         number_seq.append(char_dict[char])
 
     return np.asarray(number_seq)
+
+
+def tensor_ints_to_str(tensor_ints):
+
+    npy_ints = tensor_ints.numpy()
+    char_array = []
+
+    for int_ in npy_ints:
+        char_array.append(inv_char_dict[int_])
+
+    return ''.join(char_array)
+
 

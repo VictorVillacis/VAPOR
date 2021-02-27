@@ -1,11 +1,7 @@
 from tensorflow import keras
 import tensorflow as tf
 
-import os
-import sys
-sys.path.append(os.path.realpath('.'))
 
-from data.encode_decode import char_dict
 
 
 class VAPORASR(tf.keras.Model):
@@ -39,11 +35,11 @@ class VAPORASR(tf.keras.Model):
             batch_size = x.shape[1]
             batch_predictions = [None] * batch_size
 
-            for batch_item in range(batch_size):
+            for batch_prediction in range(batch_size):
 
-                batch_item_indices = sparse_predictions.indices[:, 0] == batch_item
+                batch_item_indices = sparse_predictions.indices[:, 0] == batch_prediction
                 batch_item_values = sparse_predictions.values[batch_item_indices]
-                batch_predictions[batch_item] = batch_item_values
+                batch_predictions[batch_prediction] = batch_item_values
 
             return batch_predictions
         else:

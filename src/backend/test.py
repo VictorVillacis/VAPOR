@@ -2,13 +2,37 @@
 import tensorflow as tf
 from data.data_loader import SpeechDataset
 from model.model import VAPORASR
+from data.encode_decode import tensor_ints_to_str
+from nltk.metrics.distance import edit_distance
 
 
 def test_step(model, x, x_len, y, y_len):
 
     out = model(x, x_len, training=False)
 
-    return
+    word_error_rate = calculate_word_error_rate(out, y, y_len)
+
+    return word_error_rate
+
+
+def calculate_word_error_rate(out, y, y_len):
+
+    batch_size = len(out)
+
+    word_error_rate = 0
+
+    for batch_index in range(batch_size):
+        batch_pred_str = tensor_ints_to_str(out[batch_index])
+        batch_y = y[batch_index]
+        batch_y_len = y_len[batch_index]
+        batch_y = batch_y[:batch_y_len]
+        batch_y_str = tensor_ints_to_str(batch_y)
+
+        word_error_rate += edit_distance(batch_pred_str, batch_y_str)
+
+    word_error_rate /= batch_size
+
+    return word_error_rate
 
 
 def test(model, opt):
