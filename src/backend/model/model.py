@@ -34,10 +34,18 @@ class VAPORASR(tf.keras.Model):
         if not training:
             x = tf.transpose(x, perm=[1, 0, 2])
             ctc_decoding = tf.nn.ctc_beam_search_decoder(inputs=x, sequence_length=x_len)
-            max_prediction_index = tf.math.argmax(ctc_decoding[1]).numpy()[0]
-            dense_predictions = tf.sparse.to_dense(ctc_decoding[0][0], default_value=char_dict['_'])
-            max_prediction = dense_predictions[max_prediction_index]
-            return max_prediction
+            sparse_predictions = ctc_decoding[0][0]
+
+            batch_size = x.shape[1]
+            batch_predictions = [None] * batch_size
+
+            for batch_item in range(batch_size):
+
+                batch_item_indices = sparse_predictions.indices[:, 0] == batch_item
+                batch_item_values = sparse_predictions.values[batch_item_indices]
+                batch_predictions[batch_item] = batch_item_values
+
+            return batch_predictions
         else:
             return x
 
