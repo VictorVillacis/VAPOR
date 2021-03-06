@@ -1,5 +1,5 @@
 import numpy as np
-
+import tensorflow as tf
 
 def create_char_dict():
     char_dict_ = dict()
@@ -42,12 +42,13 @@ def str_to_npy_ints(char_str):
     return np.asarray(number_seq)
 
 
-def tensor_ints_to_str(tensor_ints):
+def int_sequence_to_str(int_sequence):
 
-    npy_ints = tensor_ints.numpy()
+    if type(int_sequence) == tf.Tensor:
+        int_sequence = int_sequence.numpy()
     char_array = []
 
-    for int_ in npy_ints:
+    for int_ in int_sequence:
         char_array.append(inv_char_dict[int_])
 
     return ''.join(char_array)

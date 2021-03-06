@@ -2,8 +2,6 @@ from tensorflow import keras
 import tensorflow as tf
 
 
-
-
 class VAPORASR(tf.keras.Model):
 
     def get_config(self):
@@ -19,7 +17,6 @@ class VAPORASR(tf.keras.Model):
 
         return
 
-    # @tf.Module.with_name_scope
     def call(self, inputs, x_len=None, training=False, mask=None):
         x = self.conv(inputs)
         x = tf.transpose(x, perm=[0, 2, 1, 3])

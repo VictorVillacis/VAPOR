@@ -7,9 +7,10 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 from textwrap import wrap
-from data.encode_decode import str_to_npy_ints, char_dict
+from encode_decode import str_to_npy_ints, char_dict, int_sequence_to_str
 import os
 import tensorflow as tf
+import tensorflow_io as tfio
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -25,7 +26,7 @@ np.random.seed(0)
 
 class SpeechDataset(object):
 
-    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0):
+    def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0, augment: bool = False):
 
         # Initialize class attributes
         self.data_dir = Path(data_dir_)
@@ -34,6 +35,10 @@ class SpeechDataset(object):
         self.vis = Visualizer()
         self.batch_size = batch_size
         self.verbose_level = verbose_level
+        self.augment = augment
+
+        self.freq_mask_rate = 0.5
+        self.time_mask_rate = 0.5
 
         # Index data
         logger.info("Loading Data...")
@@ -127,6 +132,14 @@ class SpeechDataset(object):
         for batch_index, current_data_index in enumerate(current_data_indices):
             next_x, next_x_length, next_y, next_y_length = self.get_current_raw_data(self.data, current_data_index)
 
+            if self.augment:
+                if random.random() < self.freq_mask_rate:
+                    next_x = tfio.experimental.audio.freq_mask(next_x, param=10).numpy()
+                if random.random() < self.time_mask_rate:
+                    next_x = tfio.experimental.audio.time_mask(next_x, param=10).numpy()
+
+            self.visualize(next_x, int_sequence_to_str(next_y))
+
             x_[batch_index] = next_x
             x_lengths[batch_index] = next_x_length
             y_[batch_index] = next_y
@@ -180,16 +193,10 @@ class SpeechDataset(object):
     def __getitem__(self, item):
         return self.get_current_raw_data(self.data, item)
 
-    # @staticmethod
-    def get_current_raw_data(self, data, index):
+    @staticmethod
+    def get_current_raw_data(data, index):
         # Get current data pair
-        try:
-            current_data = data[index]
-        except:
-            print(len(data))
-            print(index)
-            print(self.data_index)
-
+        current_data = data[index]
         x_path, y_ = current_data['x'], current_data['y']
 
         # Read in X
@@ -234,7 +241,7 @@ class Visualizer:
         return
 
     @staticmethod
-    def visualize_audio(x_data, y_):
+    def visualize_audio(x_data: np.ndarray, y_: str):
 
         # Create matplotlib figure, axis
         fig = plt.figure()
@@ -256,7 +263,7 @@ class Visualizer:
 if __name__ == "__main__":
 
     data_dir = "raw/Dev/"
-    dataset = SpeechDataset(data_dir, verbose_level=1)
+    dataset = SpeechDataset(data_dir, verbose_level=2, augment=True)
 
     for batch in range(dataset.batches):
         print(batch)
