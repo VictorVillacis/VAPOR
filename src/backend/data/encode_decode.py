@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from typing import Union
 
+
 def create_char_dict() -> (dict, dict):
     """
     Creates dictionaries to translate characters to integers, and vice-versa.
@@ -76,5 +77,3 @@ def int_sequence_to_str(int_sequence: Union[tf.Tensor, np.ndarray]) -> str:
         char_array.append(inv_char_dict[int_])
 
     return ''.join(char_array)
-
-

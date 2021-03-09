@@ -11,6 +11,7 @@ from encode_decode import str_to_npy_ints, char_dict, int_sequence_to_str
 import os
 import tensorflow as tf
 import tensorflow_io as tfio
+from typing import List
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -27,6 +28,15 @@ np.random.seed(0)
 class SpeechDataset(object):
 
     def __init__(self, data_dir_: str, batch_size: int = 8, verbose_level: int = 0, augment: bool = False):
+        """
+        An iterator for speech data.
+
+        Args:
+            data_dir_: Directory where data is stored.
+            batch_size: Batch size to yield.
+            verbose_level: Level indicated how much information is printed / displayed.
+            augment: Whether to augment data or not.
+        """
 
         # Initialize class attributes
         self.data_dir = Path(data_dir_)
@@ -52,10 +62,18 @@ class SpeechDataset(object):
         self.shuffle()
         return
 
-    def load_data_paths(self):
-        # Data uses Librespeech dataset: http://www.openslr.org/12
-        # Data is organized as voice_dir > recording_dir > sample_path, with the label .txt file being in the same
-        # directory as the samples
+    def load_data_paths(self) -> None:
+        """
+        Loads data from location specified by self.data_dir.
+
+        Librespeech dataset: http://www.openslr.org/12
+
+        Data is organized as voice_dir > recording_dir > sample_path, with the label .txt file being in the same
+        directory as the samples
+
+        Returns:
+            None
+        """
 
         # For every voice...
         num_voices = len(list(self.data_dir.iterdir()))
@@ -97,6 +115,12 @@ class SpeechDataset(object):
         return
 
     def shuffle(self):
+        """
+        Shuffles dataset.
+
+        Returns:
+            None
+        """
         random.shuffle(self.data)
         return
 
@@ -115,7 +139,20 @@ class SpeechDataset(object):
             yield self.next_batch()
         return
 
-    def next_batch(self, increment_index=True):
+    def next_batch(self, increment_index: bool = True) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+        """
+        Yields next batch of speech data
+
+        Args:
+            increment_index: Whether or not to increment index after retrieving batch.
+                             Not incrementing used to sample dataset.
+
+        Returns:
+            'self.batch_size' Log-mel audio spectrograms as x_,
+            'self.batch_size' original spectrogram lengths before collation as x_lengths,
+            'self.batch_size' integer translation of text correlating to x_
+            'self.batch_size' original text lengths of text correlating to x_
+        """
 
         # Initialize batch objects
         x_, x_lengths, y_, y_lengths = [None] * self.batch_size, \
@@ -150,8 +187,23 @@ class SpeechDataset(object):
 
         return x_, x_lengths, y_, y_lengths
 
-    def collate(self, x_, x_lengths, y_, y_lengths):
+    def collate(self,
+                x_: List[np.ndarray],
+                x_lengths: List[int],
+                y_: List[np.ndarray],
+                y_lengths: List[int]) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+        """
+        Pads and stacks lists of variable length 'x's and 'y's into a dense format
 
+        Args:
+            x_: List of batch log-mel spectrograms
+            x_lengths: List of original spectrogram lengths
+            y_: List of integer sequences corresponding to x_
+            y_lengths: List of original integer sequence lengths.
+
+        Returns:
+            x and y as dense numpy arrays, x and y lengths as numpy arrays.
+        """
         # Find maximum X, Y length
         max_x_len = max(x_lengths)
         max_y_len = max(y_lengths)
@@ -194,7 +246,20 @@ class SpeechDataset(object):
         return self.get_current_raw_data(self.data, item)
 
     @staticmethod
-    def get_current_raw_data(data, index):
+    def get_current_raw_data(data: dict, index: int) -> (np.ndarray, int, np.ndarray, int):
+        """
+        Retrieves the raw x and y at data dictionary 'index' from disk.
+
+        Args:
+            data: List of dictionaries containing 'x' file location of audio file, 'y' text translation of audio file.
+            index: Index of dictionary to retrieve from data list.
+
+        Returns:
+            Log-mel audio spectrogram as x_,
+            Integer of original spectrogram length as x_length,
+            integer translation of text correlating to x_
+            Original text length of text correlating to x_
+        """
         # Get current data pair
         current_data = data[index]
         x_path, y_ = current_data['x'], current_data['y']
@@ -215,13 +280,28 @@ class SpeechDataset(object):
 
         return x_, x_length, y_, y_length
 
-    def visualize(self, x_data, y_):
-        # Use visualization class to show X, Y if verbose level is high enough
+    def visualize(self, x_data: np.ndarray, y_: str) -> None:
+        """
+        Use visualization class to show X, Y if verbose level is high enough
+
+        Args:
+            x_data: Log-mel spectrogram of x
+            y_: String of text to be displayed with x.
+
+        Returns:
+            None
+        """
         if self.verbose_level > 1:
             self.vis.visualize_audio(x_data, y_)
         return
 
-    def get_output_tensor_signatures(self):
+    def get_output_tensor_signatures(self) -> (tf.TensorSpec, tf.TensorSpec, tf.TensorSpec, tf.TensorSpec):
+        """
+        Gets output tensor specifications
+
+        Returns:
+            Tensor specifications of x, x_lengths, y, and y_lengths.
+        """
         # Get sample of data output
         x, x_lens, y, y_lens = self.next_batch(increment_index=False)
 
@@ -242,7 +322,16 @@ class Visualizer:
 
     @staticmethod
     def visualize_audio(x_data: np.ndarray, y_: str):
+        """
+        Creates a visualization of the audio with its corresponding text displayed.
 
+        Args:
+            x_data: Numpy array of log-mel spectrogram to be displayed.
+            y_: String of text to be displayed.
+
+        Returns:
+            None
+        """
         # Create matplotlib figure, axis
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -263,7 +352,7 @@ class Visualizer:
 if __name__ == "__main__":
 
     data_dir = "raw/Dev/"
-    dataset = SpeechDataset(data_dir, verbose_level=2, augment=True)
+    dataset = SpeechDataset(data_dir, verbose_level=0, augment=True)
 
     for batch in range(dataset.batches):
         print(batch)
